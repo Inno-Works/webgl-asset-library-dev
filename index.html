@@ -29,9 +29,7 @@
     </div>
     <div id="unity-fullscreen-button" style="display: none;"></div>
     <script src="TemplateData/ReadyPlayerMe/RpmGlobal.js"></script>
-    <script>
-      console.log('Main script started');
-      
+    <script>     
       const hideFullScreenButton = "1";
       const buildUrl = "Build";
 	    const mobilePixelRatio = "1";
@@ -45,12 +43,9 @@
         productName: "WebGL_Demo",
         productVersion: "0.1.0",
         normalizeUrl: function(url) {
-          console.log('Original URL:', url);
-
           // Check if the url is relative (doesn't start with http:// or https://)
           if (!/^https?:\/\//i.test(url)) {
             // If it's relative, we don't need to normalize it
-            console.log('Relative URL, returning as-is:', url);
             return url;
           }
 
@@ -77,9 +72,6 @@
               normalizedUrl += parsedUrl.hash;
             }
             
-            console.log('Normalized URL:', normalizedUrl);
-            console.log('Removed params:', originalParams !== parsedUrl.search ? 'Yes' : 'No');
-            
             return normalizedUrl;
           } catch (error) {
             console.warn('Failed to normalize URL:', url, error);
@@ -88,19 +80,15 @@
         },
   
         cacheControl: function (url) {
-          console.log('cacheControl called with URL:', url);
           const normalizedUrl = this.normalizeUrl(url);
-          console.log('Normalized URL in cacheControl:', normalizedUrl);
 
           if (normalizedUrl.match(/\.(data|png|glb)$/)) {
-            console.log('Caching enabled for:', normalizedUrl);
             return {
               url: normalizedUrl,
               policy: "must-revalidate"
             };
           }
 
-          console.log('Caching disabled for:', normalizedUrl);
           return "no-store";
         },
       };
