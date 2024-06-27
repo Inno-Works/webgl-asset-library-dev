@@ -41,6 +41,25 @@
         companyName: "InnoWorks",
         productName: "WebGL_Demo",
         productVersion: "0.1.0",
+        normalizeUrl: function(url) {
+          // Check if the url is relative (doesn't start with http:// or https://)
+          if (!/^https?:\/\//i.test(url)) {
+            // If it's relative, we don't need to normalize it
+            return url;
+          }
+
+          try {
+            const parsedUrl = new URL(url);
+            parsedUrl.searchParams.delete('skt');
+            parsedUrl.searchParams.delete('ske');
+            parsedUrl.searchParams.delete('se');
+            parsedUrl.searchParams.delete('sig');
+            return parsedUrl.toString();
+          } catch (error) {
+            console.warn('Failed to normalize URL:', url, error);
+            return url; // Return the original URL if parsing fails
+          }
+        },
         cacheControl: function (url) {
           const normalizedUrl = this.normalizeUrl(url);
 
@@ -94,11 +113,12 @@
       const script = document.createElement("script");
       script.src = loaderUrl;
       script.onload = () => {
-        createUnityInstance(canvas, config, (progress) => {
+        window.unityInstance = createUnityInstance(canvas, config, (progress) => {
           spinner.style.display = "none";
           progressBarEmpty.style.display = "";
           progressBarFull.style.width = `${100 * progress}%`;
         }).then((unityInstance) => {
+          window.unityInstance = unityInstance;
           unityGame = unityInstance;
           loadingCover.style.display = "none";
           if (canFullscreen) {
@@ -121,7 +141,7 @@
       const customCache = new Map();
 
       // Monkey-patch the UnityLoader to use our custom caching
-      const originalCreateUnityInstance = createUnityInstance;
+      const originalCreateUnityInstance = window.unityInstance;
       
       createUnityInstance = function(canvas, config, onProgress) {
         const originalXhr = config.xhr;
