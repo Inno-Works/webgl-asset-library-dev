@@ -8,6 +8,7 @@
     <link rel="shortcut icon" href="TemplateData/favicon.ico">
     <link rel="stylesheet" href="TemplateData/style.css">
     <link rel="stylesheet" href="TemplateData/ReadyPlayerMe/RpmStyle.css">
+    <script src="customCache.js"></script>
 </head>
 <body class="dark">
     <div id="unity-container" class="unity-desktop">
@@ -29,9 +30,11 @@
     <div id="unity-fullscreen-button" style="display: none;"></div>
     <script src="TemplateData/ReadyPlayerMe/RpmGlobal.js"></script>
     <script>
+      console.log('Main script started');
+      
       const hideFullScreenButton = "1";
       const buildUrl = "Build";
-	  const mobilePixelRatio = "1";
+	    const mobilePixelRatio = "1";
       const loaderUrl = buildUrl + "/webgl-asset-library-dev.loader.js";
       const config = {
         dataUrl: buildUrl + "/webgl-asset-library-dev.data.unityweb",
@@ -42,41 +45,62 @@
         productName: "WebGL_Demo",
         productVersion: "0.1.0",
         normalizeUrl: function(url) {
+          console.log('Original URL:', url);
+
           // Check if the url is relative (doesn't start with http:// or https://)
           if (!/^https?:\/\//i.test(url)) {
             // If it's relative, we don't need to normalize it
+            console.log('Relative URL, returning as-is:', url);
             return url;
           }
 
           try {
             const parsedUrl = new URL(url);
-            parsedUrl.searchParams.delete('skt');
-            parsedUrl.searchParams.delete('ske');
-            parsedUrl.searchParams.delete('se');
-            parsedUrl.searchParams.delete('sig');
-            return parsedUrl.toString();
+            const originalParams = parsedUrl.search;
+            
+            // Remove specific query parameters
+            ['skt', 'ske', 'se', 'sig'].forEach(param => parsedUrl.searchParams.delete(param));
+            
+            // Reconstruct the URL manually to preserve encoding
+            let normalizedUrl = parsedUrl.protocol + '//' + parsedUrl.host + parsedUrl.pathname;
+            
+            // Append remaining query parameters, ensuring they remain encoded
+            const remainingParams = Array.from(parsedUrl.searchParams.entries());
+            if (remainingParams.length > 0) {
+              normalizedUrl += '?' + remainingParams.map(([key, value]) => 
+                `${encodeURIComponent(key)}=${encodeURIComponent(value)}`
+              ).join('&');
+            }
+            
+            // Append hash if present
+            if (parsedUrl.hash) {
+              normalizedUrl += parsedUrl.hash;
+            }
+            
+            console.log('Normalized URL:', normalizedUrl);
+            console.log('Removed params:', originalParams !== parsedUrl.search ? 'Yes' : 'No');
+            
+            return normalizedUrl;
           } catch (error) {
             console.warn('Failed to normalize URL:', url, error);
             return url; // Return the original URL if parsing fails
           }
         },
+  
         cacheControl: function (url) {
+          console.log('cacheControl called with URL:', url);
           const normalizedUrl = this.normalizeUrl(url);
+          console.log('Normalized URL in cacheControl:', normalizedUrl);
 
-          // Caching enabled for .data and .bundle files.
-          // Revalidate if file is up to date before loading from cache
-
-          // Use normalized URL for cache key
-          if (normalizedUrl.match(/\.data/) || normalizedUrl.match(/\.png/) || normalizedUrl.match(/\.glb/)) {
+          if (normalizedUrl.match(/\.(data|png|glb)$/)) {
+            console.log('Caching enabled for:', normalizedUrl);
             return {
               url: normalizedUrl,
-              policy: "must-revalidate",
-  
+              policy: "must-revalidate"
             };
           }
 
-          // Disable explicit caching for all other files.
-          // Note: the default browser cache may cache them anyway.
+          console.log('Caching disabled for:', normalizedUrl);
           return "no-store";
         },
       };
@@ -110,58 +134,34 @@
       }
       loadingCover.style.display = "";
 
-      const script = document.createElement("script");
-      script.src = loaderUrl;
-      script.onload = () => {
-        window.unityInstance = createUnityInstance(canvas, config, (progress) => {
-          spinner.style.display = "none";
-          progressBarEmpty.style.display = "";
-          progressBarFull.style.width = `${100 * progress}%`;
-        }).then((unityInstance) => {
-          window.unityInstance = unityInstance;
-          unityGame = unityInstance;
-          loadingCover.style.display = "none";
-          if (canFullscreen) {
-            if (!hideFullScreenButton) {
-              fullscreenButton.style.display = "";
+      CustomCache.openDatabase().then(function() {
+        const script = document.createElement("script");
+        script.src = loaderUrl;
+        script.onload = () => {
+          createUnityInstance(canvas, config, (progress) => {
+            spinner.style.display = "none";
+            progressBarEmpty.style.display = "";
+            progressBarFull.style.width = `${100 * progress}%`;
+          }).then((unityInstance) => {
+            unityGame = unityInstance;
+            loadingCover.style.display = "none";
+            if (canFullscreen) {
+              if (!hideFullScreenButton) {
+                fullscreenButton.style.display = "";
+              }
+              fullscreenButton.onclick = () => {
+                unityInstance.SetFullscreen(1);
+              };
             }
-            fullscreenButton.onclick = () => {
-              unityInstance.SetFullscreen(1);
-            };
-          }
-        }).catch((message) => {
-          alert(message);
-        });
-      };
-      document.body.appendChild(script);
+          }).catch((message) => {
+            alert(message);
+          });
+        };
+        document.body.appendChild(script);
+      }).catch(function(error) {
+        console.error('Failed to open database:', error);
+      });
     </script>
     <script src="TemplateData/ReadyPlayerMe/ReadyPlayerMeFrame.js"></script>
-    <script>
-      // Custom cache for normalized URLs
-      const customCache = new Map();
-
-      // Monkey-patch the UnityLoader to use our custom caching
-      const originalCreateUnityInstance = window.unityInstance;
-      
-      createUnityInstance = function(canvas, config, onProgress) {
-        const originalXhr = config.xhr;
-        config.xhr = function(url, responseType, onProgress, onComplete, onError) {
-          const normalizedUrl = config.normalizeUrl(url);
-          
-          if (customCache.has(normalizedUrl)) {
-            const cachedResponse = customCache.get(normalizedUrl);
-            onComplete(cachedResponse);
-            return;
-          }
-          
-          return originalXhr(url, responseType, onProgress, function(response) {
-            customCache.set(normalizedUrl, response);
-            onComplete(response);
-          }, onError);
-        };
-        
-        return originalCreateUnityInstance(canvas, config, onProgress);
-      };
-    </script>
 </body>
 </html>
