@@ -42,10 +42,18 @@
         productName: "WebGL_Demo",
         productVersion: "0.1.0",
         cacheControl: function (url) {
+          const normalizedUrl = this.normalizeUrl(url);
+
           // Caching enabled for .data and .bundle files.
           // Revalidate if file is up to date before loading from cache
-          if (url.match(/\.data/) || url.match(/\.png/) || url.match(/\.glb/)) {
-            return "must-revalidate";
+
+          // Use normalized URL for cache key
+          if (normalizedUrl.match(/\.data/) || normalizedUrl.match(/\.png/) || normalizedUrl.match(/\.glb/)) {
+            return {
+              url: normalizedUrl,
+              policy: "must-revalidate",
+  
+            };
           }
 
           // Disable explicit caching for all other files.
@@ -108,5 +116,32 @@
       document.body.appendChild(script);
     </script>
     <script src="TemplateData/ReadyPlayerMe/ReadyPlayerMeFrame.js"></script>
+    <script>
+      // Custom cache for normalized URLs
+      const customCache = new Map();
+
+      // Monkey-patch the UnityLoader to use our custom caching
+      const originalCreateUnityInstance = createUnityInstance;
+      
+      createUnityInstance = function(canvas, config, onProgress) {
+        const originalXhr = config.xhr;
+        config.xhr = function(url, responseType, onProgress, onComplete, onError) {
+          const normalizedUrl = config.normalizeUrl(url);
+          
+          if (customCache.has(normalizedUrl)) {
+            const cachedResponse = customCache.get(normalizedUrl);
+            onComplete(cachedResponse);
+            return;
+          }
+          
+          return originalXhr(url, responseType, onProgress, function(response) {
+            customCache.set(normalizedUrl, response);
+            onComplete(response);
+          }, onError);
+        };
+        
+        return originalCreateUnityInstance(canvas, config, onProgress);
+      };
+    </script>
 </body>
 </html>
