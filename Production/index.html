@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en-us">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>WebGL_Demo</title>
+    <link rel="shortcut icon" href="TemplateData/favicon.ico">
+    <link rel="stylesheet" href="TemplateData/style.css">
+    <link rel="stylesheet" href="TemplateData/ReadyPlayerMe/RpmStyle.css">
+    <script src="customCache.js"></script>
+</head>
+<body class="dark">
+    <div id="unity-container" class="unity-desktop">
+        <div id="rpm-container">
+            <iframe id="rpm-frame" class="rpm-frame" allow="camera *; microphone *"></iframe>
+            <button id="rpm-hide-button" onclick="hideRpm()">Hide</button>
+        </div>
+        <canvas id="unity-canvas"></canvas>
+    </div>
+    <div id="loading-cover" style="display:none;">
+        <div id="unity-loading-bar">
+            <div id="unity-logo"><img src="logo.png"></div>
+            <div id="unity-progress-bar-empty" style="display: none;">
+                <div id="unity-progress-bar-full"></div>
+            </div>
+            <div class="spinner"></div>
+        </div>
+    </div>
+    <div id="unity-fullscreen-button" style="display: none;"></div>
+    <script src="TemplateData/ReadyPlayerMe/RpmGlobal.js"></script>
+    <script>     
+      const hideFullScreenButton = "1";
+      const buildUrl = "Build";
+	    const mobilePixelRatio = "1";
+      const loaderUrl = buildUrl + "/Production.loader.js";
+      const config = {
+        dataUrl: buildUrl + "/Production.data.unityweb",
+        frameworkUrl: buildUrl + "/Production.framework.js.unityweb",
+        codeUrl: buildUrl + "/Production.wasm.unityweb",
+        streamingAssetsUrl: "StreamingAssets",
+        companyName: "InnoWorks",
+        productName: "WebGL_Demo",
+        productVersion: "0.1.0",
+        normalizeUrl: function(url) {
+          // Check if the url is relative (doesn't start with http:// or https://)
+          if (!/^https?:\/\//i.test(url)) {
+            // If it's relative, we don't need to normalize it
+            return url;
+          }
+
+          try {
+            const parsedUrl = new URL(url);
+            const originalParams = parsedUrl.search;
+            
+            // Remove specific query parameters
+            ['skt', 'ske', 'se', 'sig'].forEach(param => parsedUrl.searchParams.delete(param));
+            
+            // Reconstruct the URL manually to preserve encoding
+            let normalizedUrl = parsedUrl.protocol + '//' + parsedUrl.host + parsedUrl.pathname;
+            
+            // Append remaining query parameters, ensuring they remain encoded
+            const remainingParams = Array.from(parsedUrl.searchParams.entries());
+            if (remainingParams.length > 0) {
+              normalizedUrl += '?' + remainingParams.map(([key, value]) => 
+                `${encodeURIComponent(key)}=${encodeURIComponent(value)}`
+              ).join('&');
+            }
+            
+            // Append hash if present
+            if (parsedUrl.hash) {
+              normalizedUrl += parsedUrl.hash;
+            }
+            
+            return normalizedUrl;
+          } catch (error) {
+            console.warn('Failed to normalize URL:', url, error);
+            return url; // Return the original URL if parsing fails
+          }
+        },
+  
+        cacheControl: function (url) {
+          const normalizedUrl = this.normalizeUrl(url);
+
+          if (normalizedUrl.match(/\.(data|png|glb)$/)) {
+            return {
+              url: normalizedUrl,
+              policy: "must-revalidate"
+            };
+          }
+
+          return "no-store";
+        },
+      };
+
+      const container = document.querySelector("#unity-container");
+      const canvas = document.querySelector("#unity-canvas");
+      const loadingCover = document.querySelector("#loading-cover");
+      const progressBarEmpty = document.querySelector("#unity-progress-bar-empty");
+      const progressBarFull = document.querySelector("#unity-progress-bar-full");
+      const fullscreenButton = document.querySelector("#unity-fullscreen-button");
+      const spinner = document.querySelector('.spinner');
+
+      const canFullscreen = (function() {
+        for (const key of [
+            'exitFullscreen',
+            'webkitExitFullscreen',
+            'webkitCancelFullScreen',
+            'mozCancelFullScreen',
+            'msExitFullscreen',
+          ]) {
+          if (key in document) {
+            return true;
+          }
+        }
+        return false;
+      }());
+
+      if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+        container.className = "unity-mobile";
+        config.devicePixelRatio = parseFloat(mobilePixelRatio);
+      }
+      loadingCover.style.display = "";
+
+      CustomCache.openDatabase().then(function() {
+        const script = document.createElement("script");
+        script.src = loaderUrl;
+        script.onload = () => {
+          createUnityInstance(canvas, config, (progress) => {
+            spinner.style.display = "none";
+            progressBarEmpty.style.display = "";
+            progressBarFull.style.width = `${100 * progress}%`;
+          }).then((unityInstance) => {
+            unityGame = unityInstance;
+            loadingCover.style.display = "none";
+            if (canFullscreen) {
+              if (!hideFullScreenButton) {
+                fullscreenButton.style.display = "";
+              }
+              fullscreenButton.onclick = () => {
+                unityInstance.SetFullscreen(1);
+              };
+            }
+          }).catch((message) => {
+            alert(message);
+          });
+        };
+        document.body.appendChild(script);
+      }).catch(function(error) {
+        console.error('Failed to open database:', error);
+      });
+    </script>
+    <script src="TemplateData/ReadyPlayerMe/ReadyPlayerMeFrame.js"></script>
+</body>
+</html>
