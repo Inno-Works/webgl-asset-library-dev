@@ -38,19 +38,69 @@ var CustomCache = {
         });
     },
 
-    getAsset: function(key) {
+    getAsset: function(key, timeoutMs = 5000) {
         return new Promise(function(resolve, reject) {
-            var transaction = CustomCache.db.transaction([CustomCache.storeName], 'readonly');
-            var store = transaction.objectStore(CustomCache.storeName);
-            var request = store.get(key);
-            request.onerror = function() {
-                console.error('Error retrieving asset');
-                reject('Error retrieving asset');
-            };
-            request.onsuccess = function() {
-                console.log('Asset retrieval result:', request.result ? 'Found' : 'Not found');
-                resolve(request.result);
-            };
+            console.log('getAsset: Starting retrieval for key:', key);
+
+            if (!CustomCache.db) {
+                console.error('getAsset: Database not initialized');
+                return reject(new Error('Database not initialized'));
+            }
+
+            let timeoutId;
+            let isCompleted = false;
+
+            const timeoutPromise = new Promise((_, rejectTimeout) => {
+                timeoutId = setTimeout(() => {
+                    if (!isCompleted) {
+                        console.error(`getAsset: Retrieval timed out after ${timeoutMs}ms for key:`, key);
+                        rejectTimeout(new Error('Asset retrieval timed out'));
+                    }
+                }, timeoutMs);
+            });
+
+            const retrievalPromise = new Promise((resolveRetrieval, rejectRetrieval) => {
+                try {
+                    const transaction = CustomCache.db.transaction([CustomCache.storeName], 'readonly');
+                    const store = transaction.objectStore(CustomCache.storeName);
+                    const request = store.get(key);
+
+                    request.onerror = function(event) {
+                        console.error('getAsset: Error retrieving asset:', event.target.error);
+                        rejectRetrieval(new Error('Error retrieving asset: ' + event.target.error));
+                    };
+
+                    request.onsuccess = function(event) {
+                        const result = event.target.result;
+                        console.log('getAsset: Asset retrieval result:', result ? 'Found' : 'Not found', 'for key:', key);
+                        resolveRetrieval(result);
+                    };
+
+                    transaction.oncomplete = function() {
+                        console.log('getAsset: Transaction completed for key:', key);
+                    };
+
+                    transaction.onerror = function(event) {
+                        console.error('getAsset: Transaction error:', event.target.error);
+                        rejectRetrieval(new Error('Transaction error: ' + event.target.error));
+                    };
+                } catch (error) {
+                    console.error('getAsset: Unexpected error:', error);
+                    rejectRetrieval(error);
+                }
+            });
+
+            Promise.race([retrievalPromise, timeoutPromise])
+                .then((result) => {
+                    isCompleted = true;
+                    clearTimeout(timeoutId);
+                    resolve(result);
+                })
+                .catch((error) => {
+                    isCompleted = true;
+                    clearTimeout(timeoutId);
+                    reject(error);
+                });
         });
     }
 };
